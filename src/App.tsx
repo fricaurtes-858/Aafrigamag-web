@@ -3,6 +3,7 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
+  ExternalLink,
   Facebook,
   FileText,
   Instagram,
@@ -10,7 +11,6 @@ import {
   MapPin,
   Menu,
   MessageCircle,
-  Play,
   Radio,
   Sprout,
   Target,
@@ -55,6 +55,7 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeImage, setActiveImage] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [radioOpen, setRadioOpen] = useState(false);
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -70,6 +71,7 @@ function App() {
           <a href="#noticias" onClick={closeMenu}>Noticias</a>
           <a href="#convocatorias" onClick={closeMenu}>Convocatorias</a>
           <a href="#galeria" onClick={closeMenu}>Galería</a>
+          <a href="#emisora" onClick={closeMenu}>Emisora</a>
           <a href="#contacto" onClick={closeMenu}>Contacto</a>
           <a className="nav-admin" href="/admin" onClick={closeMenu}>Panel admin</a>
           <a className="nav-donate" href="#donaciones" onClick={closeMenu}>Donar <ArrowRight size={16} /></a>
@@ -115,7 +117,7 @@ function App() {
 
         <section id="donaciones" className="donation-section section-pad"><div className="page-width donation-inner"><div className="donation-copy"><span className="eyebrow">Apoya nuestra misión</span><h2>Tu aporte transforma comunidades.</h2><p>Con tu apoyo podemos continuar fortaleciendo iniciativas sociales, comunitarias, productivas y culturales.</p><div className="check-list"><span><Check size={16} /> Más oportunidades</span><span><Check size={16} /> Más participación</span><span><Check size={16} /> Más territorio</span></div></div><div className="qr-card"><img className="qr-image" src={images.qr} alt="Código QR oficial Bre-B para donaciones" /><strong>QR Bre-B de donaciones</strong><span>Escanea el código desde tu aplicación bancaria.</span><small>Gracias por apoyar nuestra misión.</small></div></div></section>
 
-        <section className="radio-section"><div className="page-width radio-inner"><div className="radio-mark"><Radio size={28} /></div><div><span className="eyebrow">Emisora comunitaria</span><h2>El Sol 89 · En vivo</h2><p>La señal directa no está disponible para reproducción integrada. Ábrela desde el sitio oficial para escucharla.</p></div><a href="https://elsol89.com/" target="_blank" rel="noreferrer" className="radio-button"><Play size={17} fill="currentColor" /><span>Abrir transmisión oficial</span></a></div></section>
+        <section className="radio-section" id="emisora"><div className="page-width"><div className="radio-inner"><div className="radio-mark"><Radio size={28} /></div><div className="radio-text"><span className="eyebrow">Emisora comunitaria</span><h2>El Sol 89 · En vivo</h2><p>Plato, Magdalena · 89.0 FM</p></div><button className="radio-button" onClick={() => setRadioOpen(!radioOpen)}><span>{radioOpen ? 'Cerrar reproductor' : 'Escuchar en vivo'}</span></button></div>{radioOpen && <div className="radio-player-wrap"><iframe src="https://radio.garden/listen/el-sol-89-0-fm/cAflCAV5?embed=true" title="El Sol 89.0 FM - Plato, Magdalena" className="radio-iframe" allow="autoplay; encrypted-media" loading="lazy" /><div className="radio-player-note"><span>Reproductor integrado vía Radio Garden. Si no escuchas audio, abre la transmisión oficial.</span><a href="https://elsol89.com/" target="_blank" rel="noreferrer" className="radio-alt-link"><ExternalLink size={14} /> Abrir elsol89.com</a></div></div>}</div></section>
 
         <section id="contacto" className="contact-section section-pad page-width"><div className="contact-info"><SectionTag eyebrow="Estamos para escucharte" title="Construyamos juntos." intro="¿Tienes una idea, una alianza o quieres conocer más de nuestro trabajo? Escríbenos." /><div className="contact-lines"><span><MapPin size={18} /> Colombia · Información por actualizar</span><span><Mail size={18} /> Correo institucional por configurar</span></div><div className="socials"><a href="#contacto" aria-label="Facebook"><Facebook size={18} /></a><a href="#contacto" aria-label="Instagram"><Instagram size={18} /></a><a href="#contacto" aria-label="YouTube"><Youtube size={18} /></a></div></div><form className="contact-form" onSubmit={(event) => { event.preventDefault(); setSubmitted(true); }}><label>Nombre<input required placeholder="Tu nombre" /></label><label>Correo electrónico<input required type="email" placeholder="tu@correo.com" /></label><label>Mensaje<textarea required placeholder="Cuéntanos cómo podemos ayudarte" rows={4} /></label><label className="consent"><input type="checkbox" required /> Acepto el tratamiento de mis datos personales.</label><button className="button button-green" type="submit">{submitted ? 'Mensaje recibido' : 'Enviar mensaje'} <ArrowRight size={16} /></button></form></section>
       </main>
