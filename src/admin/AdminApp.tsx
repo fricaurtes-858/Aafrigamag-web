@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { ArrowDown, ArrowLeft, ArrowUp, Check, Copy, FilePlus2, LogOut, Pencil, Plus, Save, Settings, Trash2, X } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseConfigured } from '@/lib/supabase';
 import './admin.css';
 
 type Form = { id: string; title: string; description: string; slug: string; status: string; open_at: string | null; close_at: string | null };
@@ -30,6 +30,7 @@ function AuthScreen() {
     setBusy(false);
   }
 
+  if (!supabaseConfigured) return <div className="admin-auth"><div className="admin-auth-card"><a href="/" className="admin-back"><ArrowLeft size={15} /> Volver al sitio</a><span className="eyebrow">AAFRIGAMAG · Configuración pendiente</span><h1>Panel no disponible</h1><p>La versión publicada necesita las variables públicas de conexión para habilitar la autenticación y la base de datos.</p></div></div>;
   return <div className="admin-auth"><div className="admin-auth-card"><a href="/" className="admin-back"><ArrowLeft size={15} /> Volver al sitio</a><span className="eyebrow">AAFRIGAMAG · Acceso privado</span><h1>{isSignup ? 'Crear cuenta administradora' : 'Panel administrador'}</h1><p>{isSignup ? 'Crea la primera cuenta para habilitar la administración segura.' : 'Ingresa para administrar formularios, preguntas y respuestas.'}</p><form onSubmit={submit} className="admin-form"><label>Correo administrador<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>Contraseña<input type="password" required minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} /></label>{error && <div className="admin-error">{error}</div>}<button className="button button-green" disabled={busy}>{busy ? 'Procesando…' : isSignup ? 'Crear cuenta' : 'Ingresar'} <ArrowRightIcon /></button></form><button className="admin-switch" onClick={() => setIsSignup(!isSignup)}>{isSignup ? 'Ya tengo una cuenta' : 'Crear la primera cuenta'}</button></div></div>;
 }
 
@@ -55,8 +56,8 @@ function AdminApp() {
   const [notice, setNotice] = useState('');
   const [showAdd, setShowAdd] = useState(false);
 
-  useEffect(() => { supabase.auth.getSession().then(({ data }) => setSession(Boolean(data.session))); const { data } = supabase.auth.onAuthStateChange((_event, current) => setSession(Boolean(current))); return () => data.subscription.unsubscribe(); }, []);
-  useEffect(() => { if (session) loadForms(); }, [session]);
+  useEffect(() => { if (!supabaseConfigured) { setSession(false); return; } supabase.auth.getSession().then(({ data }) => setSession(Boolean(data.session))); const { data } = supabase.auth.onAuthStateChange((_event, current) => setSession(Boolean(current))); return () => data.subscription.unsubscribe(); }, []);
+  useEffect(() => { if (session && supabaseConfigured) loadForms(); }, [session]);
 
   async function loadForms() { const { data, error: loadError } = await supabase.from('forms').select('*').order('created_at', { ascending: false }); if (loadError) setError(messageForError()); else setForms(data ?? []); }
   async function selectForm(form: Form) { setSelected(form); const { data, error: loadError } = await supabase.from('form_fields').select('*').eq('form_id', form.id).order('sort_order'); if (loadError) setError(messageForError()); else setFields(data ?? []); }
@@ -70,6 +71,7 @@ function AdminApp() {
   async function loadSubmissions() { const { data, error: loadError } = await supabase.from('form_submissions').select('*').order('submitted_at', { ascending: false }); if (loadError) setError(messageForError()); else setSubmissions(data ?? []); }
   async function logout() { await supabase.auth.signOut(); window.location.href = '/'; }
 
+  if (!supabaseConfigured) return <AuthScreen />;
   if (session === null) return <div className="admin-loading">Cargando acceso…</div>;
   if (!session) return <AuthScreen />;
   const selectedFields = fields;
@@ -83,7 +85,7 @@ function SettingsIcon() { return <Settings size={17} />; }
 export function PublicForm() {
   const slug = window.location.pathname.split('/').filter(Boolean).pop() ?? '';
   const [form, setForm] = useState<Form | null>(null); const [fields, setFields] = useState<(Field & { form_field_options: Option[] })[]>([]); const [values, setValues] = useState<Record<string, string | boolean | FileList>>({}); const [sent, setSent] = useState(false); const [error, setError] = useState('');
-  useEffect(() => { async function load() { const { data: formData } = await supabase.from('forms').select('*').eq('slug', slug).maybeSingle(); if (!formData) { setError('Este formulario no está disponible.'); return; } const { data: fieldData } = await supabase.from('form_fields').select('*, form_field_options(*)').eq('form_id', formData.id).eq('is_active', true).order('sort_order'); setForm(formData); setFields(fieldData ?? []); } load(); }, [slug]);
+  useEffect(() => { async function load() { if (!supabaseConfigured) { setError('Este formulario necesita la conexión de producción configurada.'); return; } const { data: formData } = await supabase.from('forms').select('*').eq('slug', slug).maybeSingle(); if (!formData) { setError('Este formulario no está disponible.'); return; } const { data: fieldData } = await supabase.from('form_fields').select('*, form_field_options(*)').eq('form_id', formData.id).eq('is_active', true).order('sort_order'); setForm(formData); setFields(fieldData ?? []); } load(); }, [slug]);
   async function submit(event: FormEvent) { event.preventDefault(); if (!form) return; setError(''); const { data: submission, error: submissionError } = await supabase.from('form_submissions').insert({ form_id: form.id }).select().maybeSingle(); if (submissionError || !submission) { setError('No se pudo enviar el formulario.'); return; } for (const field of fields) { const value = values[field.id]; if (field.field_type === 'file' || field.field_type === 'multiple_files') { const files = value as FileList | undefined; if (files) for (const file of Array.from(files)) { const path = `${submission.id}/${field.id}/${crypto.randomUUID()}-${file.name}`; const upload = await supabase.storage.from('form-submissions').upload(path, file, { contentType: file.type, upsert: false }); if (upload.error) { setError('No se pudo cargar uno de los documentos.'); return; } await supabase.from('submission_files').insert({ submission_id: submission.id, field_id: field.id, storage_path: path, original_name: file.name, mime_type: file.type || 'application/octet-stream', size_bytes: file.size }); } } else { await supabase.from('form_answers').insert({ submission_id: submission.id, field_id: field.id, value: value ?? null }); } } setSent(true); }
   if (sent) return <div className="public-form-shell"><div className="public-form-card success-card"><Check size={34} /><h1>Gracias por participar</h1><p>Recibimos tu información correctamente.</p><a className="button button-green" href="/">Volver al sitio</a></div></div>;
   return <div className="public-form-shell"><div className="public-form-card"><a href="/" className="admin-back"><ArrowLeft size={15} /> AAFRIGAMAG</a>{error ? <div className="admin-empty"><h1>{error}</h1></div> : !form ? <div className="admin-loading">Cargando formulario…</div> : <><span className="eyebrow">Formulario de participación</span><h1>{form.title}</h1><p className="public-form-description">{form.description}</p><form className="public-fields" onSubmit={submit}>{fields.map((field) => <label key={field.id}>{field.label}{field.required && <b>*</b>}{field.help_text && <small>{field.help_text}</small>}{['long_text'].includes(field.field_type) ? <textarea required={field.required} rows={5} onChange={(event) => setValues({ ...values, [field.id]: event.target.value })} /> : ['boolean', 'data_consent'].includes(field.field_type) ? <span className="admin-check"><input type="checkbox" required={field.required} onChange={(event) => setValues({ ...values, [field.id]: event.target.checked })} /> Sí, acepto</span> : ['file', 'multiple_files'].includes(field.field_type) ? <input type="file" required={field.required} multiple={field.field_type === 'multiple_files'} accept={field.accepted_file_types.join(',')} onChange={(event) => setValues({ ...values, [field.id]: event.target.files ?? new DataTransfer().files })} /> : <input required={field.required} type={field.field_type === 'email' ? 'email' : field.field_type === 'number' ? 'number' : field.field_type === 'date' ? 'date' : 'text'} onChange={(event) => setValues({ ...values, [field.id]: event.target.value })} />}</label>)}<button className="button button-green">Enviar formulario <ArrowRightIcon /></button></form></>}</div></div>;
