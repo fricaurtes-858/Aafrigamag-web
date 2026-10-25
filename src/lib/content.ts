@@ -40,6 +40,7 @@ export type OurStory = {
   title: string;
   subtitle: string;
   intro: string;
+  body: string;
   status: 'draft' | 'published';
   updated_at: string;
   photos?: StoryPhoto[];

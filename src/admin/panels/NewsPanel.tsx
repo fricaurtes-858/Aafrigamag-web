@@ -187,7 +187,9 @@ export default function NewsPanel() {
     if (post.cover_path) await deleteSiteFile(post.cover_path);
     const { data: photoRows } = await supabase.from('news_photos').select('storage_path').eq('post_id', post.id);
     if (photoRows && photoRows.length > 0) {
-      await deleteSiteFile(photoRows.map((p) => p.storage_path));
+      for (const row of photoRows) {
+        await deleteSiteFile((row as { storage_path: string }).storage_path);
+      }
     }
     const { error: deleteError } = await supabase.from('news_posts').delete().eq('id', post.id);
     if (deleteError) setError(errMsg());

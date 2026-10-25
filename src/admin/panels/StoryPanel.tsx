@@ -46,7 +46,7 @@ export default function StoryPanel() {
   async function createStory() {
     const { data, error: insertError } = await supabase
       .from('our_story')
-      .insert({ title: 'Nuestra historia', subtitle: '', intro: '' })
+      .insert({ title: 'Nuestra historia' })
       .select()
       .maybeSingle();
     if (insertError || !data) {
@@ -57,10 +57,9 @@ export default function StoryPanel() {
     await openStory(data as OurStory);
   }
 
-  async function saveField<K extends keyof OurStory>(key: K, value: OurStory[K]) {
+  function updateField<K extends keyof OurStory>(key: K, value: OurStory[K]) {
     if (!selected) return;
-    const updated = { ...selected, [key]: value };
-    setSelected(updated);
+    setSelected({ ...selected, [key]: value });
   }
 
   async function saveStory() {
@@ -73,6 +72,7 @@ export default function StoryPanel() {
         title: selected.title,
         subtitle: selected.subtitle,
         intro: selected.intro,
+        body: selected.body,
         status: selected.status,
         updated_at: new Date().toISOString(),
       })
@@ -110,7 +110,7 @@ export default function StoryPanel() {
     }
     const { data, error: insertError } = await supabase
       .from('our_story_photos')
-      .insert({ story_id: selected.id, storage_path: stored, caption: '', sort_order: (selected.photos?.length ?? 0) })
+      .insert({ story_id: selected.id, storage_path: stored, caption: '', sort_order: selected.photos?.length ?? 0 })
       .select()
       .maybeSingle();
     if (insertError || !data) {
@@ -118,6 +118,7 @@ export default function StoryPanel() {
       return;
     }
     setSelected({ ...selected, photos: [...(selected.photos ?? []), data as StoryPhoto] });
+    event.target.value = '';
   }
 
   async function removePhoto(photo: StoryPhoto) {
@@ -138,7 +139,7 @@ export default function StoryPanel() {
     }
     const { data, error: insertError } = await supabase
       .from('our_story_documents')
-      .insert({ story_id: selected.id, storage_path: stored, original_name: file.name, title: file.name, sort_order: (selected.documents?.length ?? 0) })
+      .insert({ story_id: selected.id, storage_path: stored, original_name: file.name, title: file.name, sort_order: selected.documents?.length ?? 0 })
       .select()
       .maybeSingle();
     if (insertError || !data) {
@@ -146,6 +147,7 @@ export default function StoryPanel() {
       return;
     }
     setSelected({ ...selected, documents: [...(selected.documents ?? []), data as StoryDocument] });
+    event.target.value = '';
   }
 
   async function removeDocument(doc: StoryDocument) {
@@ -177,7 +179,7 @@ export default function StoryPanel() {
               <input
                 className="editor-title"
                 value={selected?.title ?? ''}
-                onChange={(event) => saveField('title', event.target.value)}
+                onChange={(event) => updateField('title', event.target.value)}
                 placeholder="Título de la historia"
               />
               <span className={`read-badge ${selected?.status === 'published' ? 'read' : 'unread'}`}>
@@ -198,29 +200,25 @@ export default function StoryPanel() {
             <>
               <label className="story-field">
                 Subtítulo
-                <input value={selected.subtitle} onChange={(event) => saveField('subtitle', event.target.value)} placeholder="Subtítulo o bajada" />
+                <input value={selected.subtitle} onChange={(event) => updateField('subtitle', event.target.value)} placeholder="Subtítulo o bajada" />
               </label>
               <label className="story-field">
-              Intro
-                <textarea value={selected.intro} onChange={(event) => saveField('intro', event.target.value)} rows={3} placeholder="Texto introductorio breve" />
+                Intro (resumen breve)
+                <textarea value={selected.intro} onChange={(event) => updateField('intro', event.target.value)} rows={3} placeholder="Texto introductorio breve que aparece en la sección Nosotros" />
               </label>
 
               <div className="story-section-block">
                 <div className="story-block-head">
-                  <h3>Historia</h3>
-                  <p>Escribe cada párrafo de la historia en una línea. Se mostrarán separados.</p>
+                  <h3>Historia completa</h3>
+                  <p>Escribe cada párrafo separado por una línea en blanco. Se mostrarán como párrafos en la página pública.</p>
                 </div>
                 <textarea
                   className="story-body-area"
-                  rows={10}
-                  placeholder={'Escribe aquí la historia de AAFRIGAMAG.\\n\\nCada salto de línea inicia un nuevo párrafo.'}
-                  value={selected.intro}
-                  onChange={(event) => saveField('intro', event.target.value)}
+                  rows={14}
+                  placeholder={'Escribe aquí la historia de AAFRIGAMAG.\n\nCada salto de línea inicia un nuevo párrafo en la página pública.'}
+                  value={selected.body}
+                  onChange={(event) => updateField('body', event.target.value)}
                 />
-                <p className="story-help">
-                  Usa el campo “Intro” para un resumen breve y el cuerpo largo abajo. Si necesitas
-                  más campos, añádelos aquí.
-                </p>
               </div>
 
               <div className="story-section-block">
@@ -291,7 +289,7 @@ export default function StoryPanel() {
                         />
                         {url && (
                           <a className="text-link" href={url} target="_blank" rel="noreferrer">
-                            Ver <X size={0} style={{ display: 'none' }} />
+                            Abrir
                           </a>
                         )}
                         <button className="icon-button danger" onClick={() => removeDocument(doc)}>
