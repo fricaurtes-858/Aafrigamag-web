@@ -220,12 +220,12 @@ function ContactForm() {
   return (
     <form className="contact-form" onSubmit={submit}>
       <label>Nombre completo<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Tu nombre completo" disabled={busy} /></label>
-      <label>Correo electrónico<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="tu@correo.com" disabled={busy} /></label>
-      <label>Teléfono (opcional)<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="300 000 0000" disabled={busy} /></label>
+      <label>Correo electrónico<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Tu correo electrónico" disabled={busy} /></label>
+      <label>Teléfono (opcional)<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Tu número de teléfono" disabled={busy} /></label>
       <label>Asunto<input required value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="¿Sobre qué nos escribes?" disabled={busy} /></label>
       <label>Mensaje<textarea required value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Cuéntanos cómo podemos ayudarte" rows={4} disabled={busy} /></label>
       <label className="contact-attach-label">
-        Adjuntar documentos (opcional)
+        Documentos adjuntos (opcional)
         <span className="contact-attach-hint">PDF, DOC, DOCX, XLS, XLSX, JPG o PNG · máximo {MAX_CONTACT_FILE_MB} MB por archivo · hasta {MAX_CONTACT_FILES} archivos.</span>
         <input
           type="file"
