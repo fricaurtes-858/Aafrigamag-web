@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import RadioPlayer from '@/components/RadioPlayer';
 import { supabase, supabaseConfigured } from '@/lib/supabase';
-import { getPublishedStory, getRecentNews, getSiteSettings, publicUrl, uploadContactAttachment, fileKey, isAllowedContactFile, MAX_CONTACT_FILE_MB, MAX_CONTACT_FILES, type NewsPost, type OurStory } from '@/lib/content';
+import { getPublishedStory, getRecentNews, getSiteSettings, publicUrl, uploadContactAttachment, fileKey, isAllowedContactFile, MAX_CONTACT_FILE_MB, MAX_CONTACT_FILES, DEFAULT_CONTACT_SETTINGS, type NewsPost, type OurStory, type SiteSettings } from '@/lib/content';
 
 function newsDate(value: string | null): string {
   if (!value) return '';
@@ -68,7 +68,8 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function ContactForm() {
+function ContactForm({ settings }: { settings: SiteSettings | null }) {
+  const s = settings ?? (DEFAULT_CONTACT_SETTINGS as SiteSettings);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -206,8 +207,8 @@ function ContactForm() {
         <div className="contact-success">
           <Check size={28} />
           <div>
-            <strong>Mensaje recibido</strong>
-            <span>Gracias por escribirnos. Te contactaremos pronto.</span>
+            <strong>{s.form_success_title || 'Mensaje recibido'}</strong>
+            <span>{s.form_success_text || 'Gracias por escribirnos. Te contactaremos pronto.'}</span>
           </div>
         </div>
         <button className="button button-green" type="submit">Enviar otro mensaje <ArrowRight size={16} /></button>
@@ -219,13 +220,13 @@ function ContactForm() {
 
   return (
     <form className="contact-form" onSubmit={submit}>
-      <label>Nombre completo<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Tu nombre completo" disabled={busy} /></label>
-      <label>Correo electrónico<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Tu correo electrónico" disabled={busy} /></label>
-      <label>Teléfono (opcional)<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Tu número de teléfono" disabled={busy} /></label>
-      <label>Asunto<input required value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="¿Sobre qué nos escribes?" disabled={busy} /></label>
-      <label>Mensaje<textarea required value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Cuéntanos cómo podemos ayudarte" rows={4} disabled={busy} /></label>
+      <label>{s.form_label_name || 'Nombre completo'}<input required value={name} onChange={(event) => setName(event.target.value)} placeholder={s.form_placeholder_name || 'Tu nombre completo'} disabled={busy} /></label>
+      <label>{s.form_label_email || 'Correo electrónico'}<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={s.form_placeholder_email || 'Tu correo electrónico'} disabled={busy} /></label>
+      <label>{s.form_label_phone || 'Teléfono (opcional)'}<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder={s.form_placeholder_phone || 'Tu número de teléfono'} disabled={busy} /></label>
+      <label>{s.form_label_subject || 'Asunto'}<input required value={subject} onChange={(event) => setSubject(event.target.value)} placeholder={s.form_placeholder_subject || '¿Sobre qué nos escribes?'} disabled={busy} /></label>
+      <label>{s.form_label_message || 'Mensaje'}<textarea required value={message} onChange={(event) => setMessage(event.target.value)} placeholder={s.form_placeholder_message || 'Cuéntanos cómo podemos ayudarte'} rows={4} disabled={busy} /></label>
       <label className="contact-attach-label">
-        Documentos adjuntos (opcional)
+        {s.form_label_attachments || 'Documentos adjuntos (opcional)'}
         <span className="contact-attach-hint">PDF, DOC, DOCX, XLS, XLSX, JPG o PNG · máximo {MAX_CONTACT_FILE_MB} MB por archivo · hasta {MAX_CONTACT_FILES} archivos.</span>
         <input
           type="file"
@@ -251,11 +252,11 @@ function ContactForm() {
       <p className="contact-privacy-note">
         Los archivos que adjuntes se enviarán a AAFRIGAMAG para atender tu comunicación. No serán publicados ni compartidos públicamente.
       </p>
-      <label className="consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} disabled={busy} /> Acepto el tratamiento de mis datos personales.</label>
+      <label className="consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} disabled={busy} /> {s.form_consent_text || 'Acepto el tratamiento de mis datos personales.'}</label>
       {status === 'error' && <div className="contact-error">{errorMsg}</div>}
       {uploadProgress && <div className="contact-progress">{uploadProgress}</div>}
       <button className="button button-green" type="submit" disabled={busy}>
-        {busy ? 'Enviando…' : 'Enviar mensaje'} <ArrowRight size={16} />
+        {busy ? 'Enviando…' : (s.form_submit_text || 'Enviar mensaje')} <ArrowRight size={16} />
       </button>
     </form>
   );
@@ -264,7 +265,7 @@ function ContactForm() {
 function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeImage, setActiveImage] = useState<string | null>(null);
-  const [institutionalEmail, setInstitutionalEmail] = useState('');
+  const [settings, setSettings] = useState<SiteSettings | null>(null);
   const [recentNews, setRecentNews] = useState<NewsPost[]>([]);
   const [story, setStory] = useState<OurStory | null>(null);
 
@@ -272,13 +273,28 @@ function App() {
 
   useEffect(() => {
     (async () => {
-      const settings = await getSiteSettings();
-      if (settings) setInstitutionalEmail(settings.institutional_email);
+      const current = await getSiteSettings();
+      setSettings(current);
       const [news, publishedStory] = await Promise.all([getRecentNews(3), getPublishedStory()]);
       setRecentNews(news);
       setStory(publishedStory);
     })();
   }, []);
+
+  const s = settings ?? (DEFAULT_CONTACT_SETTINGS as SiteSettings);
+  const institutionalEmail = (s.institutional_email ?? '').trim();
+  const locationText = [s.contact_municipality, s.contact_department, s.contact_country]
+    .map((v) => (v ?? '').trim())
+    .filter(Boolean)
+    .join(', ')
+    .replace(/,([^,]*)$/, ' ·$1');
+  const facebook = (s.contact_facebook ?? '').trim();
+  const instagram = (s.contact_instagram ?? '').trim();
+  const youtube = (s.contact_youtube ?? '').trim();
+  const whatsapp = (s.contact_whatsapp ?? '').trim();
+  const whatsappUrl = whatsapp
+    ? `https://wa.me/${whatsapp.replace(/[^0-9]/g, '')}`
+    : '';
 
   return (
     <div className="app-shell">
@@ -341,12 +357,12 @@ function App() {
 
         <section className="radio-section" id="emisora"><div className="page-width"><div className="radio-inner"><div className="radio-mark"><Radio size={28} /></div><div className="radio-text"><span className="eyebrow">Emisora comunitaria</span><h2>El Sol 89 · En vivo</h2><p>Plato, Magdalena · 89.0 FM</p></div></div><RadioPlayer /></div></section>
 
-        <section id="contacto" className="contact-section section-pad page-width"><div className="contact-info"><SectionTag eyebrow="Estamos para escucharte" title="Construyamos juntos." intro="¿Tienes una idea, una propuesta de alianza o quieres conocer más sobre nuestro trabajo? Escríbenos." /><div className="contact-lines"><span><MapPin size={18} /> Plato, Magdalena · Colombia</span>{institutionalEmail ? <a className="contact-mail-link" href={`mailto:${institutionalEmail}`}><Mail size={18} /> {institutionalEmail}</a> : <span><Mail size={18} /> Correo institucional por configurar</span>}</div><div className="socials"><a href="#contacto" aria-label="Facebook"><Facebook size={18} /></a><a href="#contacto" aria-label="Instagram"><Instagram size={18} /></a><a href="#contacto" aria-label="YouTube"><Youtube size={18} /></a></div></div><ContactForm /></section>
+        <section id="contacto" className="contact-section section-pad page-width"><div className="contact-info"><SectionTag eyebrow={s.contact_eyebrow || 'Estamos para escucharte'} title={s.contact_title || 'Construyamos juntos.'} intro={s.contact_intro || ''} /><div className="contact-lines"><span><MapPin size={18} /> {locationText || 'Plato, Magdalena · Colombia'}</span>{institutionalEmail ? <a className="contact-mail-link" href={`mailto:${institutionalEmail}`}><Mail size={18} /> {institutionalEmail}</a> : <span><Mail size={18} /> Correo institucional por configurar</span>}</div><div className="socials">{facebook && <a href={facebook} target="_blank" rel="noreferrer" aria-label="Facebook"><Facebook size={18} /></a>}{instagram && <a href={instagram} target="_blank" rel="noreferrer" aria-label="Instagram"><Instagram size={18} /></a>}{youtube && <a href={youtube} target="_blank" rel="noreferrer" aria-label="YouTube"><Youtube size={18} /></a>}</div></div><ContactForm settings={settings} /></section>
       </main>
 
       <footer className="site-footer"><div className="page-width footer-top"><Logo light /><div className="footer-links"><div><strong>Explora</strong><a href="#nosotros">Nosotros</a><a href="#trabajo">Qué hacemos</a><a href="/noticias">Noticias</a><a href="/documentos">Documentos</a></div><div><strong>Participa</strong><a href="#convocatorias">Convocatorias</a><a href="#donaciones">Donaciones</a><a href="#contacto">Contacto</a></div><div><strong>Legal</strong><a href="#contacto">Privacidad</a><a href="#contacto">Tratamiento de datos</a><a href="#contacto">Términos</a></div></div></div><div className="page-width footer-bottom"><span>© 2024 AAFRIGAMAG · Contenido institucional editable</span><a href="/admin" id="admin">Panel administrador <ArrowRight size={14} /></a></div></footer>
 
-      <a className="whatsapp-float" href="#contacto" aria-label="Escríbenos por WhatsApp"><MessageCircle size={22} /></a>
+      {whatsappUrl && <a className="whatsapp-float" href={whatsappUrl} target="_blank" rel="noreferrer" aria-label="Escríbenos por WhatsApp"><MessageCircle size={22} /></a>}
       {activeImage && <div className="lightbox" role="dialog" aria-label="Vista ampliada" onClick={() => setActiveImage(null)}><button onClick={() => setActiveImage(null)} aria-label="Cerrar"><X /></button><img src={activeImage} alt="Vista ampliada de la galería" /></div>}
     </div>
   );

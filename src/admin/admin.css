@@ -60,6 +60,27 @@
 
 /* Settings panel */
 .settings-card{background:#fff;border:1px solid #dde8df;border-radius:6px;padding:30px;max-width:560px}
+.settings-panel{display:grid;grid-template-columns:1fr;gap:24px;max-width:1100px}
+.settings-panel .settings-card{max-width:none}
+.settings-group-title{font:700 14px Manrope;color:#123e34;margin:22px 0 10px;padding-bottom:6px;border-bottom:1px solid #eef3ef}
+.settings-preview{background:#f7faf8;border:1px solid #e2ebe6;border-radius:6px;padding:22px}
+.settings-preview .eyebrow{color:#1f7a5c}
+.settings-preview h3{font:700 20px Manrope;color:#123e34;margin:4px 0 8px}
+.settings-preview p{color:#566b62;font-size:14px;line-height:1.55;margin:0 0 14px}
+.settings-preview-lines{display:flex;flex-direction:column;gap:6px;margin:0 0 10px;font-size:13px;color:#3a4a44}
+.settings-preview-lines span{display:inline-flex;align-items:center;gap:8px}
+.settings-preview-socials{display:flex;flex-direction:column;gap:6px;font-size:13px;color:#3a4a44;margin:0 0 8px}
+.settings-preview-socials span{display:inline-flex;align-items:center;gap:8px}
+.settings-preview-whatsapp{font-size:13px;color:#3a4a44;margin:0 0 8px}
+.settings-preview-whatsapp span{display:inline-flex;align-items:center;gap:8px}
+.settings-preview .muted{color:#9aa8a1;font-style:italic}
+.settings-preview hr{border:0;border-top:1px solid #e2ebe6;margin:14px 0}
+.settings-preview-form{display:flex;flex-direction:column;gap:6px;font-size:13px;color:#3a4a44}
+.settings-preview-form strong{margin-top:4px}
+.settings-preview-form input,.settings-preview-form textarea{padding:6px 8px;border:1px solid #d6e0da;border-radius:4px;background:#fff;color:#9aa8a1}
+.settings-preview-form .consent{display:flex;align-items:center;gap:8px;font-size:13px}
+.settings-preview-form button{align-self:flex-start;margin-top:6px}
+@media (min-width:960px){.settings-panel{grid-template-columns:1fr 1fr}}
 .settings-card h2{font:700 22px Manrope;margin:6px 0 12px;color:#123e34}
 .settings-help{color:#718078;font-size:13px;line-height:1.6;margin:0 0 22px}
 .input-with-icon{display:flex;align-items:center;gap:10px;border:1px solid #d2dfd6;border-radius:4px;background:#fff;padding:0 12px}

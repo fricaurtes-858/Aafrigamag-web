@@ -29,6 +29,65 @@ export type SiteSettings = {
   id: string;
   institutional_email: string;
   updated_at: string;
+  // Contact presentation
+  contact_eyebrow: string;
+  contact_title: string;
+  contact_intro: string;
+  contact_municipality: string;
+  contact_department: string;
+  contact_country: string;
+  contact_phone: string;
+  contact_whatsapp: string;
+  contact_facebook: string;
+  contact_instagram: string;
+  contact_youtube: string;
+  // Contact form copy
+  form_label_name: string;
+  form_placeholder_name: string;
+  form_label_email: string;
+  form_placeholder_email: string;
+  form_label_phone: string;
+  form_placeholder_phone: string;
+  form_label_subject: string;
+  form_placeholder_subject: string;
+  form_label_message: string;
+  form_placeholder_message: string;
+  form_label_attachments: string;
+  form_consent_text: string;
+  form_submit_text: string;
+  form_success_title: string;
+  form_success_text: string;
+};
+
+export const DEFAULT_CONTACT_SETTINGS: Omit<SiteSettings, 'id' | 'updated_at'> = {
+  institutional_email: '',
+  contact_eyebrow: 'Estamos para escucharte',
+  contact_title: 'Construyamos juntos.',
+  contact_intro:
+    '¿Tienes una idea, una propuesta de alianza o quieres conocer más sobre nuestro trabajo? Escríbenos.',
+  contact_municipality: 'Plato',
+  contact_department: 'Magdalena',
+  contact_country: 'Colombia',
+  contact_phone: '',
+  contact_whatsapp: '',
+  contact_facebook: '',
+  contact_instagram: '',
+  contact_youtube: '',
+  form_label_name: 'Nombre completo',
+  form_placeholder_name: 'Tu nombre completo',
+  form_label_email: 'Correo electrónico',
+  form_placeholder_email: 'Tu correo electrónico',
+  form_label_phone: 'Teléfono (opcional)',
+  form_placeholder_phone: 'Tu número de teléfono',
+  form_label_subject: 'Asunto',
+  form_placeholder_subject: '¿Sobre qué nos escribes?',
+  form_label_message: 'Mensaje',
+  form_placeholder_message: 'Cuéntanos cómo podemos ayudarte',
+  form_label_attachments: 'Documentos adjuntos (opcional)',
+  form_consent_text: 'Acepto el tratamiento de mis datos personales.',
+  form_submit_text: 'Enviar mensaje',
+  form_success_title: 'Mensaje recibido',
+  form_success_text: 'Gracias por escribirnos. Te contactaremos pronto.',
 };
 
 export type StoryPhoto = {
