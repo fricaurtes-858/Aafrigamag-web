@@ -15,23 +15,22 @@ const fieldTypes = [
 function messageForError(): string { return 'No pudimos completar la acción. Revisa los datos e inténtalo de nuevo.'; }
 function slugify(value: string): string { return value.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''); }
 
+const ADMIN_EMAIL = 'fricaurtes@gmail.com';
+
 function AuthScreen() {
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isSignup, setIsSignup] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function submit(event: FormEvent) {
     event.preventDefault(); setError(''); setBusy(true);
-    const result = isSignup ? await supabase.auth.signUp({ email, password }) : await supabase.auth.signInWithPassword({ email, password });
-    if (result.error) setError('No fue posible acceder. Verifica el correo y la contraseña.');
-    if (!result.error && isSignup) await supabase.rpc('bootstrap_first_admin');
+    const result = await supabase.auth.signInWithPassword({ email: ADMIN_EMAIL, password });
+    if (result.error) setError('Contraseña incorrecta. Verifica e inténtalo de nuevo.');
     setBusy(false);
   }
 
   if (!supabaseConfigured) return <div className="admin-auth"><div className="admin-auth-card"><a href="/" className="admin-back"><ArrowLeft size={15} /> Volver al sitio</a><span className="eyebrow">AAFRIGAMAG · Configuración pendiente</span><h1>Panel no disponible</h1><p>La versión publicada necesita las variables públicas de conexión para habilitar la autenticación y la base de datos.</p></div></div>;
-  return <div className="admin-auth"><div className="admin-auth-card"><a href="/" className="admin-back"><ArrowLeft size={15} /> Volver al sitio</a><span className="eyebrow">AAFRIGAMAG · Acceso privado</span><h1>{isSignup ? 'Crear cuenta administradora' : 'Panel administrador'}</h1><p>{isSignup ? 'Crea la primera cuenta para habilitar la administración segura.' : 'Ingresa para administrar formularios, preguntas y respuestas.'}</p><form onSubmit={submit} className="admin-form"><label>Correo administrador<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>Contraseña<input type="password" required minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} /></label>{error && <div className="admin-error">{error}</div>}<button className="button button-green" disabled={busy}>{busy ? 'Procesando…' : isSignup ? 'Crear cuenta' : 'Ingresar'} <ArrowRightIcon /></button></form><button className="admin-switch" onClick={() => setIsSignup(!isSignup)}>{isSignup ? 'Ya tengo una cuenta' : 'Crear la primera cuenta'}</button></div></div>;
+  return <div className="admin-auth"><div className="admin-auth-card"><a href="/" className="admin-back"><ArrowLeft size={15} /> Volver al sitio</a><span className="eyebrow">AAFRIGAMAG · Acceso privado</span><h1>Panel administrador</h1><p>Ingresa tu contraseña para administrar formularios, preguntas y respuestas.</p><form onSubmit={submit} className="admin-form"><label>Contraseña<input type="password" required value={password} onChange={(event) => setPassword(event.target.value)} autoFocus /></label>{error && <div className="admin-error">{error}</div>}<button className="button button-green" disabled={busy}>{busy ? 'Procesando…' : 'Ingresar al panel'} <ArrowRightIcon /></button></form></div></div>;
 }
 
 function ArrowRightIcon() { return <span aria-hidden="true">→</span>; }
