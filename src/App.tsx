@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { FormEvent, useState } from 'react';
 import {
   ArrowRight,
   CalendarDays,
@@ -18,6 +18,7 @@ import {
   Youtube,
 } from 'lucide-react';
 import RadioPlayer from '@/components/RadioPlayer';
+import { supabase, supabaseConfigured } from '@/lib/supabase';
 
 const images = {
   logo: '/images/WhatsApp_Image_2026-10-23_at_12.37.17_PM.jpeg',
@@ -51,10 +52,98 @@ function SectionTag({ eyebrow, title, intro, light = false }: SectionTagProps) {
   );
 }
 
+function ContactForm() {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const [consent, setConsent] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  function validateEmail(value: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (status === 'sending') return;
+
+    setStatus('sending');
+    setErrorMsg('');
+
+    if (!name.trim() || !email.trim() || !message.trim()) {
+      setStatus('error');
+      setErrorMsg('Por favor completa todos los campos.');
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      setStatus('error');
+      setErrorMsg('El correo electrónico no tiene un formato válido.');
+      return;
+    }
+
+    if (!consent) {
+      setStatus('error');
+      setErrorMsg('Debes aceptar el tratamiento de datos para enviar el mensaje.');
+      return;
+    }
+
+    if (!supabaseConfigured) {
+      setStatus('error');
+      setErrorMsg('No fue posible enviar el mensaje en este momento. Intenta más tarde.');
+      return;
+    }
+
+    const { error: insertError } = await supabase
+      .from('contact_messages')
+      .insert({ name: name.trim(), email: email.trim(), message: message.trim() });
+
+    if (insertError) {
+      setStatus('error');
+      setErrorMsg('No fue posible enviar el mensaje. Intenta nuevamente en unos minutos.');
+      return;
+    }
+
+    setName('');
+    setEmail('');
+    setMessage('');
+    setConsent(false);
+    setStatus('sent');
+  }
+
+  if (status === 'sent') {
+    return (
+      <form className="contact-form" onSubmit={(event) => { event.preventDefault(); setStatus('idle'); }}>
+        <div className="contact-success">
+          <Check size={28} />
+          <div>
+            <strong>Mensaje recibido</strong>
+            <span>Gracias por escribirnos. Te contactaremos pronto.</span>
+          </div>
+        </div>
+        <button className="button button-green" type="submit">Enviar otro mensaje <ArrowRight size={16} /></button>
+      </form>
+    );
+  }
+
+  return (
+    <form className="contact-form" onSubmit={submit}>
+      <label>Nombre<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Tu nombre" disabled={status === 'sending'} /></label>
+      <label>Correo electrónico<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="tu@correo.com" disabled={status === 'sending'} /></label>
+      <label>Mensaje<textarea required value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Cuéntanos cómo podemos ayudarte" rows={4} disabled={status === 'sending'} /></label>
+      <label className="consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} disabled={status === 'sending'} /> Acepto el tratamiento de mis datos personales.</label>
+      {status === 'error' && <div className="contact-error">{errorMsg}</div>}
+      <button className="button button-green" type="submit" disabled={status === 'sending'}>
+        {status === 'sending' ? 'Enviando…' : 'Enviar mensaje'} <ArrowRight size={16} />
+      </button>
+    </form>
+  );
+}
+
 function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeImage, setActiveImage] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState(false);
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -118,7 +207,7 @@ function App() {
 
         <section className="radio-section" id="emisora"><div className="page-width"><div className="radio-inner"><div className="radio-mark"><Radio size={28} /></div><div className="radio-text"><span className="eyebrow">Emisora comunitaria</span><h2>El Sol 89 · En vivo</h2><p>Plato, Magdalena · 89.0 FM</p></div></div><RadioPlayer /></div></section>
 
-        <section id="contacto" className="contact-section section-pad page-width"><div className="contact-info"><SectionTag eyebrow="Estamos para escucharte" title="Construyamos juntos." intro="¿Tienes una idea, una alianza o quieres conocer más de nuestro trabajo? Escríbenos." /><div className="contact-lines"><span><MapPin size={18} /> Colombia · Información por actualizar</span><span><Mail size={18} /> Correo institucional por configurar</span></div><div className="socials"><a href="#contacto" aria-label="Facebook"><Facebook size={18} /></a><a href="#contacto" aria-label="Instagram"><Instagram size={18} /></a><a href="#contacto" aria-label="YouTube"><Youtube size={18} /></a></div></div><form className="contact-form" onSubmit={(event) => { event.preventDefault(); setSubmitted(true); }}><label>Nombre<input required placeholder="Tu nombre" /></label><label>Correo electrónico<input required type="email" placeholder="tu@correo.com" /></label><label>Mensaje<textarea required placeholder="Cuéntanos cómo podemos ayudarte" rows={4} /></label><label className="consent"><input type="checkbox" required /> Acepto el tratamiento de mis datos personales.</label><button className="button button-green" type="submit">{submitted ? 'Mensaje recibido' : 'Enviar mensaje'} <ArrowRight size={16} /></button></form></section>
+        <section id="contacto" className="contact-section section-pad page-width"><div className="contact-info"><SectionTag eyebrow="Estamos para escucharte" title="Construyamos juntos." intro="¿Tienes una idea, una alianza o quieres conocer más de nuestro trabajo? Escríbenos." /><div className="contact-lines"><span><MapPin size={18} /> Colombia · Información por actualizar</span><span><Mail size={18} /> Correo institucional por configurar</span></div><div className="socials"><a href="#contacto" aria-label="Facebook"><Facebook size={18} /></a><a href="#contacto" aria-label="Instagram"><Instagram size={18} /></a><a href="#contacto" aria-label="YouTube"><Youtube size={18} /></a></div></div><ContactForm /></section>
       </main>
 
       <footer className="site-footer"><div className="page-width footer-top"><Logo light /><div className="footer-links"><div><strong>Explora</strong><a href="#nosotros">Nosotros</a><a href="#trabajo">Qué hacemos</a><a href="#noticias">Noticias</a></div><div><strong>Participa</strong><a href="#convocatorias">Convocatorias</a><a href="#donaciones">Donaciones</a><a href="#contacto">Contacto</a></div><div><strong>Legal</strong><a href="#contacto">Privacidad</a><a href="#contacto">Tratamiento de datos</a><a href="#contacto">Términos</a></div></div></div><div className="page-width footer-bottom"><span>© 2024 AAFRIGAMAG · Contenido institucional editable</span><a href="/admin" id="admin">Panel administrador <ArrowRight size={14} /></a></div></footer>
