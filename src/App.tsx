@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import {
   ArrowRight,
   CalendarDays,
@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import RadioPlayer from '@/components/RadioPlayer';
 import { supabase, supabaseConfigured } from '@/lib/supabase';
+import { getPublishedStory, getRecentNews, getSiteSettings, publicUrl, type NewsPost, type OurStory } from '@/lib/content';
 
 const images = {
   logo: '/images/WhatsApp_Image_2026-10-23_at_12.37.17_PM.jpeg',
@@ -144,8 +145,21 @@ function ContactForm() {
 function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeImage, setActiveImage] = useState<string | null>(null);
+  const [institutionalEmail, setInstitutionalEmail] = useState('');
+  const [recentNews, setRecentNews] = useState<NewsPost[]>([]);
+  const [story, setStory] = useState<OurStory | null>(null);
 
   const closeMenu = () => setMenuOpen(false);
+
+  useEffect(() => {
+    (async () => {
+      const settings = await getSiteSettings();
+      if (settings) setInstitutionalEmail(settings.institutional_email);
+      const [news, publishedStory] = await Promise.all([getRecentNews(3), getPublishedStory()]);
+      setRecentNews(news);
+      setStory(publishedStory);
+    })();
+  }, []);
 
   return (
     <div className="app-shell">
@@ -156,8 +170,9 @@ function App() {
         <nav className={menuOpen ? 'main-nav open' : 'main-nav'} aria-label="Navegación principal">
           <a href="#nosotros" onClick={closeMenu}>Nosotros</a>
           <a href="#trabajo" onClick={closeMenu}>Qué hacemos</a>
-          <a href="#noticias" onClick={closeMenu}>Noticias</a>
+          <a href="/noticias" onClick={closeMenu}>Noticias</a>
           <a href="#convocatorias" onClick={closeMenu}>Convocatorias</a>
+          <a href="/documentos" onClick={closeMenu}>Documentos</a>
           <a href="#galeria" onClick={closeMenu}>Galería</a>
           <a href="#emisora" onClick={closeMenu}>Emisora</a>
           <a href="#contacto" onClick={closeMenu}>Contacto</a>
@@ -182,8 +197,7 @@ function App() {
         <section className="quick-links page-width">
           <a href="#trabajo" className="quick-card"><span className="quick-icon green"><Sprout /></span><span><strong>Proyectos</strong><small>Conoce nuestras iniciativas</small></span><ArrowRight size={17} /></a>
           <a href="#noticias" className="quick-card"><span className="quick-icon blue"><FileText /></span><span><strong>Noticias</strong><small>Lo que está pasando</small></span><ArrowRight size={17} /></a>
-          <a href="#convocatorias" className="quick-card"><span className="quick-icon yellow"><CalendarDays /></span><span><strong>Convocatorias</strong><small>Participa y construye</small></span><ArrowRight size={17} /></a>
-          <a href="#donaciones" className="quick-card featured"><span className="quick-icon white"><Target /></span><span><strong>Donaciones</strong><small>Tu aporte transforma</small></span><ArrowRight size={17} /></a>
+          <a href="/documentos" className="quick-card"><span className="quick-icon yellow"><CalendarDays /></span><span><strong>Documentos</strong><small>Biblioteca institucional</small></span><ArrowRight size={17} /></a>
         </section>
 
         <section id="nosotros" className="story-section page-width section-pad">
