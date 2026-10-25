@@ -1,6 +1,19 @@
 import { supabase } from '@/lib/supabase';
 
 export const STORAGE_BUCKET = 'site-media';
+export const CONTACT_BUCKET = 'contact-attachments';
+export const ALLOWED_CONTACT_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'image/jpeg',
+  'image/png',
+];
+export const ALLOWED_CONTACT_EXTS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png'];
+export const MAX_CONTACT_FILE_MB = 10;
+export const MAX_CONTACT_FILES = 5;
 export const DOCUMENT_CATEGORIES = [
   'Institucionales',
   'Estatutos',
@@ -82,6 +95,27 @@ export type NewsPost = {
   created_at: string;
   updated_at: string;
   photos?: NewsPhoto[];
+};
+
+export type ContactMessage = {
+  id: string;
+  name: string;
+  email: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+  phone?: string | null;
+  subject?: string | null;
+};
+
+export type ContactAttachment = {
+  id: string;
+  message_id: string;
+  storage_path: string;
+  original_name: string;
+  mime_type: string;
+  size_bytes: number;
+  created_at: string;
 };
 
 export function publicUrl(path: string | null | undefined): string | null {
@@ -263,4 +297,49 @@ export async function deleteSiteFile(path: string): Promise<void> {
 
 export function fileKey(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function fileExt(name: string): string {
+  return name.split('.').pop()?.toLowerCase() ?? '';
+}
+
+export function isAllowedContactFile(file: File): boolean {
+  const ext = fileExt(file.name);
+  return (
+    ALLOWED_CONTACT_EXTS.includes(ext) &&
+    (ALLOWED_CONTACT_TYPES.includes(file.type) || file.type === '' || file.type.startsWith('image/'))
+  );
+}
+
+export async function createSignedContactUrl(path: string, expiresInSec = 60): Promise<string | null> {
+  const { data, error } = await supabase.storage
+    .from(CONTACT_BUCKET)
+    .createSignedUrl(path, expiresInSec);
+  if (error || !data?.signedUrl) return null;
+  return data.signedUrl;
+}
+
+export async function uploadContactAttachment(
+  path: string,
+  file: File,
+): Promise<{ path: string; error: string | null }> {
+  const { data, error } = await supabase.storage
+    .from(CONTACT_BUCKET)
+    .upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false });
+  if (error) return { path: '', error: error.message };
+  return { path: data.path, error: null };
+}
+
+export async function deleteContactAttachment(path: string): Promise<void> {
+  await supabase.storage.from(CONTACT_BUCKET).remove([path]);
+}
+
+export async function getContactAttachments(messageId: string): Promise<ContactAttachment[]> {
+  const { data, error } = await supabase
+    .from('contact_attachments')
+    .select('*')
+    .eq('message_id', messageId)
+    .order('created_at');
+  if (error) return [];
+  return data as ContactAttachment[];
 }

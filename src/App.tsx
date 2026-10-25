@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import RadioPlayer from '@/components/RadioPlayer';
 import { supabase, supabaseConfigured } from '@/lib/supabase';
-import { getPublishedStory, getRecentNews, getSiteSettings, publicUrl, type NewsPost, type OurStory } from '@/lib/content';
+import { getPublishedStory, getRecentNews, getSiteSettings, publicUrl, uploadContactAttachment, fileKey, isAllowedContactFile, MAX_CONTACT_FILE_MB, MAX_CONTACT_FILES, type NewsPost, type OurStory } from '@/lib/content';
 
 function newsDate(value: string | null): string {
   if (!value) return '';
@@ -62,16 +62,54 @@ function SectionTag({ eyebrow, title, intro, light = false }: SectionTagProps) {
   );
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function ContactForm() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [consent, setConsent] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  const [uploadProgress, setUploadProgress] = useState<string>('');
 
   function validateEmail(value: string): boolean {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+  }
+
+  function addFiles(list: FileList | null) {
+    if (!list) return;
+    const incoming = Array.from(list);
+    const accepted: File[] = [];
+    for (const file of incoming) {
+      if (!isAllowedContactFile(file)) {
+        setErrorMsg(`El archivo "${file.name}" no tiene un formato permitido (PDF, DOC, DOCX, XLS, XLSX, JPG, PNG).`);
+        continue;
+      }
+      if (file.size > MAX_CONTACT_FILE_MB * 1024 * 1024) {
+        setErrorMsg(`El archivo "${file.name}" supera el tamaño máximo de ${MAX_CONTACT_FILE_MB} MB.`);
+        continue;
+      }
+      accepted.push(file);
+    }
+    const combined = [...files, ...accepted];
+    if (combined.length > MAX_CONTACT_FILES) {
+      setErrorMsg(`Puedes adjuntar un máximo de ${MAX_CONTACT_FILES} archivos.`);
+      setFiles(combined.slice(0, MAX_CONTACT_FILES));
+    } else {
+      setFiles(combined);
+    }
+  }
+
+  function removeFile(index: number) {
+    setFiles(files.filter((_, i) => i !== index));
   }
 
   async function submit(event: FormEvent) {
@@ -80,10 +118,11 @@ function ContactForm() {
 
     setStatus('sending');
     setErrorMsg('');
+    setUploadProgress('');
 
-    if (!name.trim() || !email.trim() || !message.trim()) {
+    if (!name.trim() || !email.trim() || !subject.trim() || !message.trim()) {
       setStatus('error');
-      setErrorMsg('Por favor completa todos los campos.');
+      setErrorMsg('Por favor completa nombre, correo, asunto y mensaje.');
       return;
     }
 
@@ -95,7 +134,7 @@ function ContactForm() {
 
     if (!consent) {
       setStatus('error');
-      setErrorMsg('Debes aceptar el tratamiento de datos para enviar el mensaje.');
+      setErrorMsg('Debes aceptar el tratamiento de tus datos para enviar el mensaje.');
       return;
     }
 
@@ -105,20 +144,59 @@ function ContactForm() {
       return;
     }
 
-    const { error: insertError } = await supabase
+    const { data: messageRow, error: insertError } = await supabase
       .from('contact_messages')
-      .insert({ name: name.trim(), email: email.trim(), message: message.trim() });
+      .insert({
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim() || null,
+        subject: subject.trim(),
+        message: message.trim(),
+      })
+      .select()
+      .maybeSingle();
 
-    if (insertError) {
+    if (insertError || !messageRow) {
       setStatus('error');
       setErrorMsg('No fue posible enviar el mensaje. Intenta nuevamente en unos minutos.');
       return;
     }
 
+    const messageId = messageRow.id;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      setUploadProgress(`Subiendo archivo ${i + 1} de ${files.length}…`);
+      const path = `${messageId}/${fileKey()}-${file.name}`;
+      const { path: stored, error: uploadError } = await uploadContactAttachment(path, file);
+      if (uploadError) {
+        setStatus('error');
+        setErrorMsg('No se pudo adjuntar uno de los archivos. Tu mensaje fue recibido; intenta reenviar los adjuntos.');
+        setUploadProgress('');
+        return;
+      }
+      const { error: attachError } = await supabase.from('contact_attachments').insert({
+        message_id: messageId,
+        storage_path: stored,
+        original_name: file.name,
+        mime_type: file.type || 'application/octet-stream',
+        size_bytes: file.size,
+      });
+      if (attachError) {
+        setStatus('error');
+        setErrorMsg('No fue posible registrar uno de los archivos adjuntos.');
+        setUploadProgress('');
+        return;
+      }
+    }
+
+    setUploadProgress('');
     setName('');
     setEmail('');
+    setPhone('');
+    setSubject('');
     setMessage('');
     setConsent(false);
+    setFiles([]);
     setStatus('sent');
   }
 
@@ -137,15 +215,47 @@ function ContactForm() {
     );
   }
 
+  const busy = status === 'sending';
+
   return (
     <form className="contact-form" onSubmit={submit}>
-      <label>Nombre<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Tu nombre" disabled={status === 'sending'} /></label>
-      <label>Correo electrónico<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="tu@correo.com" disabled={status === 'sending'} /></label>
-      <label>Mensaje<textarea required value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Cuéntanos cómo podemos ayudarte" rows={4} disabled={status === 'sending'} /></label>
-      <label className="consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} disabled={status === 'sending'} /> Acepto el tratamiento de mis datos personales.</label>
+      <label>Nombre completo<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Tu nombre completo" disabled={busy} /></label>
+      <label>Correo electrónico<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="tu@correo.com" disabled={busy} /></label>
+      <label>Teléfono (opcional)<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="300 000 0000" disabled={busy} /></label>
+      <label>Asunto<input required value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="¿Sobre qué nos escribes?" disabled={busy} /></label>
+      <label>Mensaje<textarea required value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Cuéntanos cómo podemos ayudarte" rows={4} disabled={busy} /></label>
+      <label className="contact-attach-label">
+        Adjuntar documentos (opcional)
+        <span className="contact-attach-hint">PDF, DOC, DOCX, XLS, XLSX, JPG o PNG · máximo {MAX_CONTACT_FILE_MB} MB por archivo · hasta {MAX_CONTACT_FILES} archivos.</span>
+        <input
+          type="file"
+          multiple
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+          onChange={(event) => addFiles(event.target.files)}
+          disabled={busy}
+        />
+      </label>
+      {files.length > 0 && (
+        <ul className="contact-file-list">
+          {files.map((file, index) => (
+            <li key={`${file.name}-${index}`}>
+              <span className="contact-file-name">{file.name}</span>
+              <span className="contact-file-size">{formatBytes(file.size)}</span>
+              <button type="button" className="contact-file-remove" onClick={() => removeFile(index)} disabled={busy} aria-label={`Quitar ${file.name}`}>
+                <X size={15} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="contact-privacy-note">
+        Los archivos que adjuntes se enviarán a AAFRIGAMAG para atender tu comunicación. No serán publicados ni compartidos públicamente.
+      </p>
+      <label className="consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} disabled={busy} /> Acepto el tratamiento de mis datos personales.</label>
       {status === 'error' && <div className="contact-error">{errorMsg}</div>}
-      <button className="button button-green" type="submit" disabled={status === 'sending'}>
-        {status === 'sending' ? 'Enviando…' : 'Enviar mensaje'} <ArrowRight size={16} />
+      {uploadProgress && <div className="contact-progress">{uploadProgress}</div>}
+      <button className="button button-green" type="submit" disabled={busy}>
+        {busy ? 'Enviando…' : 'Enviar mensaje'} <ArrowRight size={16} />
       </button>
     </form>
   );

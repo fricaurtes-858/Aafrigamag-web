@@ -1,17 +1,18 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { ArrowDown, ArrowLeft, ArrowUp, Check, CheckCheck, Copy, FileText, FilePlus2, LogOut, Mail, MailOpen, Newspaper, Pencil, Plus, Save, Settings, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowUp, Check, CheckCheck, Copy, Download, FileText, FilePlus2, LogOut, Mail, MailOpen, Newspaper, Paperclip, Pencil, Plus, Save, Settings, Trash2, X } from 'lucide-react';
 import { supabase, supabaseConfigured } from '@/lib/supabase';
 import StoryPanel from '@/admin/panels/StoryPanel';
 import DocumentsPanel from '@/admin/panels/DocumentsPanel';
 import NewsPanel from '@/admin/panels/NewsPanel';
 import SettingsPanel from '@/admin/panels/SettingsPanel';
+import { createSignedContactUrl, deleteContactAttachment, getContactAttachments, type ContactAttachment } from '@/lib/content';
 import './admin.css';
 
 type Form = { id: string; title: string; description: string; slug: string; status: string; open_at: string | null; close_at: string | null };
 type Field = { id: string; form_id: string; field_type: string; label: string; help_text: string; required: boolean; sort_order: number; is_active: boolean; accepted_file_types: string[]; max_file_size_mb: number; max_files: number };
 type Option = { id: string; field_id: string; label: string; value: string; sort_order: number };
 type Submission = { id: string; form_id: string; status: string; submitted_at: string };
-type ContactMessage = { id: string; name: string; email: string; message: string; is_read: boolean; created_at: string };
+type ContactMessage = { id: string; name: string; email: string; message: string; is_read: boolean; created_at: string; phone?: string | null; subject?: string | null; has_attachments?: boolean };
 
 const fieldTypes = [
   ['short_text', 'Texto corto'], ['long_text', 'Texto largo'], ['name', 'Nombre'], ['identification', 'Número de identificación'], ['email', 'Correo electrónico'], ['phone', 'Teléfono'], ['address', 'Dirección'], ['municipality', 'Municipio'], ['department', 'Departamento'], ['date', 'Fecha'], ['number', 'Número'], ['boolean', 'Sí / No'], ['single_choice', 'Selección única'], ['multi_choice', 'Selección múltiple'], ['select', 'Lista desplegable'], ['checkboxes', 'Casillas de verificación'], ['file', 'Carga de archivo'], ['multiple_files', 'Carga de múltiples archivos'], ['data_consent', 'Aceptación de tratamiento de datos'],
@@ -75,9 +76,26 @@ function AdminApp() {
   async function removeField(field: Field) { if (!window.confirm('¿Eliminar esta pregunta?')) return; const { error: removeError } = await supabase.from('form_fields').delete().eq('id', field.id); if (removeError) setError(messageForError()); else setFields(fields.filter((item) => item.id !== field.id)); }
   async function moveField(index: number, direction: -1 | 1) { const other = index + direction; if (other < 0 || other >= fields.length) return; const next = [...fields]; [next[index], next[other]] = [next[other], next[index]]; await Promise.all(next.map((field, order) => supabase.from('form_fields').update({ sort_order: order }).eq('id', field.id))); setFields(next.map((field, sort_order) => ({ ...field, sort_order }))); }
   async function loadSubmissions() { const { data, error: loadError } = await supabase.from('form_submissions').select('*').order('submitted_at', { ascending: false }); if (loadError) setError(messageForError()); else setSubmissions(data ?? []); }
-  async function loadContactMessages() { const { data, error: loadError } = await supabase.from('contact_messages').select('*').order('created_at', { ascending: false }); if (loadError) setError(messageForError()); else setContactMessages(data ?? []); }
+  async function loadContactMessages() {
+    const { data: msgs, error: loadError } = await supabase.from('contact_messages').select('*').order('created_at', { ascending: false });
+    if (loadError) { setError(messageForError()); return; }
+    const list = (msgs ?? []) as ContactMessage[];
+    const { data: attachCounts } = await supabase.from('contact_attachments').select('message_id');
+    const counts = new Map<string, number>();
+    for (const row of (attachCounts ?? []) as { message_id: string }[]) {
+      counts.set(row.message_id, (counts.get(row.message_id) ?? 0) + 1);
+    }
+    setContactMessages(list.map((m) => ({ ...m, has_attachments: (counts.get(m.id) ?? 0) > 0 })));
+  }
   async function markMessageRead(msg: ContactMessage, isRead: boolean) { const { error: updateError } = await supabase.from('contact_messages').update({ is_read: isRead }).eq('id', msg.id); if (updateError) setError(messageForError()); else { const updated = { ...msg, is_read: isRead }; setContactMessages(contactMessages.map((m) => m.id === msg.id ? updated : m)); if (openMessage?.id === msg.id) setOpenMessage(updated); } }
-  async function deleteMessage(msg: ContactMessage) { if (!window.confirm('¿Eliminar este mensaje permanentemente?')) return; const { error: deleteError } = await supabase.from('contact_messages').delete().eq('id', msg.id); if (deleteError) setError(messageForError()); else { setContactMessages(contactMessages.filter((m) => m.id !== msg.id)); if (openMessage?.id === msg.id) setOpenMessage(null); setNotice('Mensaje eliminado'); } }
+  async function deleteMessage(msg: ContactMessage) {
+    if (!window.confirm('¿Eliminar este mensaje permanentemente? Se eliminarán también sus archivos adjuntos.')) return;
+    const attachments = await getContactAttachments(msg.id);
+    for (const att of attachments) { await deleteContactAttachment(att.storage_path); }
+    const { error: deleteError } = await supabase.from('contact_messages').delete().eq('id', msg.id);
+    if (deleteError) setError(messageForError());
+    else { setContactMessages(contactMessages.filter((m) => m.id !== msg.id)); if (openMessage?.id === msg.id) setOpenMessage(null); setNotice('Mensaje eliminado'); await loadContactMessages(); }
+  }
   async function openMessageDetail(msg: ContactMessage) { setOpenMessage(msg); if (!msg.is_read) { await markMessageRead(msg, true); } }
   async function logout() { await supabase.auth.signOut(); window.location.href = '/'; }
 
@@ -93,12 +111,15 @@ function Responses({ submissions, forms }: { submissions: Submission[]; forms: F
 
 function ContactMessages({ messages, onOpen, onMarkRead, onDelete }: { messages: ContactMessage[]; onOpen: (msg: ContactMessage) => void; onMarkRead: (msg: ContactMessage, isRead: boolean) => void; onDelete: (msg: ContactMessage) => void }) {
   if (messages.length === 0) return <div className="admin-empty"><Mail size={28} /><h2>No hay mensajes todavía</h2><p>Los mensajes del formulario de contacto aparecerán aquí.</p></div>;
-  return <div className="responses-table">{messages.map((msg) => <div className={`response-row contact-msg-row ${msg.is_read ? '' : 'unread'}`} key={msg.id}>
+  const unreadCount = messages.filter((m) => !m.is_read).length;
+  return <div className="responses-table">{unreadCount > 0 && <div className="messages-new-notice"><Mail size={15} /> {unreadCount} nueva{unreadCount > 1 ? 's' : ''} comunicación{unreadCount > 1 ? 'es' : ''} recibida{unreadCount > 1 ? 's' : ''}{messages.some((m) => !m.is_read && m.has_attachments) ? ' (algunas con archivos adjuntos)' : ''}</div>}{messages.map((msg) => <div className={`response-row contact-msg-row ${msg.is_read ? '' : 'unread'}`} key={msg.id}>
     <div className="contact-msg-info" onClick={() => onOpen(msg)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(msg); }}>
       {!msg.is_read && <span className="unread-dot" />}
       <strong>{msg.name}</strong>
       <span className="contact-msg-email">{msg.email}</span>
+      <span className="contact-msg-subject">{msg.subject || 'Sin asunto'}</span>
       <span className="contact-msg-preview">{msg.message.length > 60 ? msg.message.slice(0, 60) + '…' : msg.message}</span>
+      {msg.has_attachments && <span className="contact-msg-attach"><Paperclip size={13} /> Adjuntos</span>}
     </div>
     <span className="contact-msg-date">{new Date(msg.created_at).toLocaleString('es-CO')}</span>
     <div className="contact-msg-actions">
@@ -111,16 +132,63 @@ function ContactMessages({ messages, onOpen, onMarkRead, onDelete }: { messages:
 }
 
 function MessageDetail({ message, onClose, onMarkRead, onDelete }: { message: ContactMessage; onClose: () => void; onMarkRead: (msg: ContactMessage, isRead: boolean) => void; onDelete: (msg: ContactMessage) => void }) {
+  const [attachments, setAttachments] = useState<ContactAttachment[]>([]);
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const list = await getContactAttachments(message.id);
+      if (!active) return;
+      setAttachments(list);
+      const urls: Record<string, string> = {};
+      for (const att of list) {
+        const url = await createSignedContactUrl(att.storage_path, 300);
+        if (url) urls[att.id] = url;
+      }
+      if (!active) return;
+      setSignedUrls(urls);
+      setLoading(false);
+    })();
+    return () => { active = false; };
+  }, [message.id]);
+
+  function formatSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
   return <div className="admin-modal-backdrop"><div className="admin-modal message-detail-modal">
     <button className="modal-close" onClick={onClose}><X size={18} /></button>
     <span className="eyebrow">Mensaje de contacto</span>
     <h2>{message.name}</h2>
     <div className="message-meta">
       <span><Mail size={14} /> {message.email}</span>
+      {message.phone && <span>Tel: {message.phone}</span>}
       <span>{new Date(message.created_at).toLocaleString('es-CO')}</span>
       <span className={`read-badge ${message.is_read ? 'read' : 'unread'}`}>{message.is_read ? 'Leído' : 'No leído'}</span>
     </div>
+    {message.subject && <div className="message-subject"><strong>Asunto:</strong> {message.subject}</div>}
     <div className="message-body">{message.message}</div>
+    <div className="message-attachments-block">
+      <h3><Paperclip size={16} /> Documentos adjuntos</h3>
+      {loading ? <p className="story-empty">Cargando adjuntos…</p> : attachments.length === 0 ? <p className="story-empty">Este mensaje no incluye documentos adjuntos.</p> : <ul className="message-attachments-list">{attachments.map((att) => (
+        <li key={att.id}>
+          <FileText size={16} />
+          <div className="attachment-info">
+            <strong>{att.original_name}</strong>
+            <span>{att.mime_type} · {formatSize(att.size_bytes)}</span>
+          </div>
+          {signedUrls[att.id] ? (
+            <a className="icon-button" href={signedUrls[att.id]} target="_blank" rel="noreferrer" title="Ver / descargar">
+              <Download size={15} />
+            </a>
+          ) : <span className="story-empty">URL no disponible</span>}
+        </li>
+      ))}</ul>}
+    </div>
     <div className="message-detail-actions">
       <button className="button button-outline" onClick={() => onMarkRead(message, !message.is_read)}>
         {message.is_read ? <><MailOpen size={16} /> Marcar como no leído</> : <><CheckCheck size={16} /> Marcar como leído</>}
